@@ -24,15 +24,28 @@ HashKiller is designed to help security enthusiasts, researchers, and developers
 
 # Installation
 
-  Clone this repository or download the ZIP.
-  Navigate to the project directory.
-  Install the necessary Python packages:
-  
-  `pip install -r requirements.txt`
+To install HashKiller and make it directly callable from the terminal:
+
+Clone the Repository:
+
+
+`git clone https://github.com/your_github_username/HashKiller.git
+cd HashKiller`
+
+Replace your_github_username with the appropriate GitHub username.
+
+Run the Installation Script:
+First, ensure the script is executable:
+
+`chmod +x install.sh`
+
+Then, execute the script:
+
+`./install.sh`
+
+After a successful installation, you can call HashKiller directly from any terminal window using the HashKiller command.
 
 # Usage
-
-bash
 
 `$python hashkiller.py --hash YOUR_HASH_FILE --hash-type HASH_TYPE [--length PASSWORD_MIN_LENGTH] [--threads NUM_OF_THREADS] [--safety]`
 
