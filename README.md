@@ -29,8 +29,10 @@ To install HashKiller and make it directly callable from the terminal:
 Clone the Repository:
 
 
-`git clone https://github.com/usethisname1419/HashKiller.git
-cd HashKiller`
+`git clone https://github.com/usethisname1419/HashKiller.git`
+
+`cd HashKiller`
+
 
 
 Run the Installation Script:
