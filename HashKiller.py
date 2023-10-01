@@ -90,7 +90,7 @@ if __name__ == "__main__":
     chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*'
     min_length = args.length
 
-    safety_pause = 1 if args.safety else None
+    safety_pause = 1.35 if args.safety else None
 
     try:
         with open(args.hash, 'r') as file:
