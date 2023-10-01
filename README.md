@@ -41,7 +41,7 @@ First, ensure the script is executable:
 
 Then, execute the script:
 
-`./install.sh`
+`sudo ./install.sh`
 
 After a successful installation, you can call HashKiller directly from any terminal window using the HashKiller command.
 
