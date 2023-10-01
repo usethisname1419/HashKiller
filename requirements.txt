@@ -1,0 +1,4 @@
+argparse
+hashlib
+passlib
+colorama
