@@ -17,9 +17,9 @@ pip3 install -r requirements.txt
 
 
 
-chmod +x hashkiller.py
+chmod +x HashKiller.py
 
 
-cp hashkiller.py /usr/local/bin/HashKiller
+cp HashKiller.py /usr/local/bin/HashKiller
 
 echo "Installation completed. You can now call your script with 'HashKiller'"
