@@ -41,7 +41,7 @@ def nt_hash(string):
 
 
 def resource_usage():
-    cpu_percent = psutil.cpu_percent(interval=0)  # Non-blocking; gives CPU usage since last call
+    cpu_percent = psutil.cpu_percent(interval=0)  
     memory_info = psutil.virtual_memory()
     return cpu_percent, memory_info.percent
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     parser.add_argument("--threads", type=int, default=1, choices=[1, 2, 3, 4],
                         help="Number of threads to use for brute-forcing. Default is 1. Max is 4.")
     parser.add_argument("--safety", type=int, choices=[1, 2, 3], default=None,
-                        help="Choose a safety level to reduce CPU usage during brute-forcing.")
+                        help="Choose a safety level to reduce CPU usage during brute-forcing. Safety levels 1, 2, 3")
 
     args = parser.parse_args()
 
