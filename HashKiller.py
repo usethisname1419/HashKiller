@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-
+import psutil
 import argparse
 import hashlib
 from itertools import product
@@ -10,6 +10,10 @@ import threading
 from colorama import Fore, init
 
 init(autoreset=True)
+
+shutdown_event = threading.Event()
+
+
 def generate_combinations(chars, min_length, max_length=22):
     for length in range(min_length, max_length + 1):
         for combo in product(chars, repeat=length):
@@ -36,14 +40,29 @@ def nt_hash(string):
     return nthash.hash(string)
 
 
-def print_current_password(hash_type, target_hash, current_word):
-    print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='', flush=True)
+def resource_usage():
+    cpu_percent = psutil.cpu_percent(interval=0)  # Non-blocking; gives CPU usage since last call
+    memory_info = psutil.virtual_memory()
+    return cpu_percent, memory_info.percent
+
+def print_current_password(hash_type, target_hash, current_word, counter):
+
+    if counter % 10000 == 0:
+        cpu, mem = resource_usage()
+        print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='')
+        print(f'\n\rCPU Usage: {cpu}%    Memory Usage: {mem}%', end='')
+        print("\033[F", end='', flush=True)
+    else:
+        print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='', flush=True)
 
 
 def brute_force(target_hash, hash_type, chars, min_length, max_length, safety_pause=None):
     counter = 0
     for word in generate_combinations(chars, min_length, max_length):
-        print_current_password(hash_type, target_hash, word)
+        if shutdown_event.is_set():
+            return
+
+        print_current_password(hash_type, target_hash, word, counter)
 
         if hash_type == 'md5':
             computed_hash = md5_hash(word)
@@ -63,8 +82,13 @@ def brute_force(target_hash, hash_type, chars, min_length, max_length, safety_pa
             return word
 
         counter += 1
-        if safety_pause and counter % 699999 == 0:
-            time.sleep(safety_pause)
+        if args.safety:
+            if args.safety == 1 and counter % 699999 == 0:
+                time.sleep(1.35)
+            elif args.safety == 2 and counter % 699999 == 0:
+                time.sleep(2)
+            elif args.safety == 3 and counter % 199999 == 0:
+                time.sleep(1.5)
 
 
 def worker(target_hash, hash_type, chars, min_length, max_length, safety_pause, results):
@@ -85,8 +109,8 @@ if __name__ == "__main__":
                         help="Minimum password length to start brute-forcing. Default is 4, can be set between 4 and 8.")
     parser.add_argument("--threads", type=int, default=1, choices=[1, 2, 3, 4],
                         help="Number of threads to use for brute-forcing. Default is 1. Max is 4.")
-    parser.add_argument("--safety", action="store_true",
-                        help="Enables a throttle mechanism to reduce CPU usage during brute-forcing.")
+    parser.add_argument("--safety", type=int, choices=[1, 2, 3], default=None,
+                        help="Choose a safety level to reduce CPU usage during brute-forcing.")
 
     args = parser.parse_args()
 
@@ -109,16 +133,23 @@ if __name__ == "__main__":
         print("Error: File is empty or contains no valid hash.")
         exit(1)
 
-    results = []
-    threads = []
-    for _ in range(args.threads):
-        t = threading.Thread(target=worker,
-                             args=(target_hash, args.hash_type, chars, min_length, 22, safety_pause, results))
-        t.start()
-        threads.append(t)
+    try:
+        results = []
+        threads = []
+        for _ in range(args.threads):
+            t = threading.Thread(target=worker,
+                                 args=(target_hash, args.hash_type, chars, min_length, 22, safety_pause, results))
+            t.start()
+            threads.append(t)
 
-    for t in threads:
-        t.join()
+        for t in threads:
+            t.join()
+
+    except KeyboardInterrupt:
+        print("\nInitiating graceful shutdown. Please wait...")
+        shutdown_event.set()
+        for t in threads:
+            t.join()
 
     if results and results[0]:
         print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {results[0]}")
