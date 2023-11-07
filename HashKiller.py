@@ -43,7 +43,7 @@ def brute_force(target_hash, hash_type, chars, min_length, max_length, success_e
     counter = 0
 
     for word in generate_combinations(chars, min_length, max_length):
-        if shutdown_event.is_set() or success_event.is_set(): 
+        if shutdown_event.is_set() or success_event.is_set():
             return
 
         print_current_password(hash_type, target_hash, word)
@@ -56,7 +56,7 @@ def brute_force(target_hash, hash_type, chars, min_length, max_length, success_e
             computed_hash = sha256_hash(word)
         elif hash_type == 'sha512_unix':
             if sha512_crypt.verify(word, target_hash):
-                success_event.set()  
+                success_event.set()
                 with print_lock:
                     print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {word}")
                     time.sleep(2)
@@ -69,8 +69,10 @@ def brute_force(target_hash, hash_type, chars, min_length, max_length, success_e
         if computed_hash == target_hash:
             success_event.set()
             match_found_event.set()
+            time.sleep(1)
             with print_lock:
                 print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {word}")
+
             return word
 
         counter += 1
@@ -163,7 +165,7 @@ if __name__ == "__main__":
     try:
         success_event = threading.Event()  #success event to signal threads to stop
 
-        threads = []  
+        threads = []
 
         for _ in range(args.threads):
             t = threading.Thread(target=brute_force,
