@@ -52,8 +52,6 @@ def print_current_password(hash_type, target_hash, current_word, counter):
         print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='')
         print(f'\n\rCPU Usage: {cpu}%    Memory Usage: {mem}%', end='')
         print("\033[F", end='', flush=True)
-    else:
-        print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='', flush=True)
 
 
 def brute_force(target_hash, hash_type, chars, min_length, max_length, safety_pause=None):
