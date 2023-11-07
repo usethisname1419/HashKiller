@@ -8,7 +8,7 @@ import time
 from passlib.hash import sha512_crypt, nthash
 import threading
 from colorama import Fore, init
-
+print_lock = threading.Lock()
 init(autoreset=True)
 
 shutdown_event = threading.Event()
@@ -48,10 +48,11 @@ def resource_usage():
 def print_current_password(hash_type, target_hash, current_word, counter):
 
     if counter % 10000 == 0:
-        cpu, mem = resource_usage()
-        print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='')
-        print(f'\n\rCPU Usage: {cpu}%    Memory Usage: {mem}%', end='')
-        print("\033[F", end='', flush=True)
+        with print_lock:
+            cpu, mem = resource_usage()
+            print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='')
+            print(f'\n\rCPU Usage: {cpu}%    Memory Usage: {mem}%', end='')
+            print("\033[F", end='', flush=True)
 
 
 def brute_force(target_hash, hash_type, chars, min_length, max_length, safety_pause=None):
