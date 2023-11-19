@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import concurrent.futures
 import psutil
 import argparse
 import hashlib
@@ -14,30 +14,39 @@ init(autoreset=True)
 
 shutdown_event = threading.Event()
 match_found_event = threading.Event()
+threads = []
+
 def generate_combinations(chars, min_length, max_length=22):
     for length in range(min_length, max_length + 1):
         for combo in product(chars, repeat=length):
             yield ''.join(combo)
 
+
 def md5_hash(string):
     return hashlib.md5(string.encode()).hexdigest()
+
 
 def sha1_hash(string):
     return hashlib.sha1(string.encode()).hexdigest()
 
+
 def sha256_hash(string):
     return hashlib.sha256(string.encode()).hexdigest()
+
 
 def sha512_unix_hash(string):
     return sha512_crypt.using(rounds=5000).hash(string)
 
+
 def nt_hash(string):
     return nthash.hash(string)
+
 
 def print_current_password(hash_type, target_hash, current_word):
     with print_lock:
         print(f'\rTYPE: {hash_type} | TARGET: {target_hash} | TRYING: {current_word}', end='')
         print("\033[K", end='', flush=True)
+
 
 def brute_force(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None):
     counter = 0
@@ -89,24 +98,33 @@ def resource_printer():
     while not shutdown_event.is_set():
         cpu, mem = resource_usage()
         with print_lock:
-
             print(f'\n\rCPU Usage: {cpu}%    Memory Usage: {mem}%', end='', flush=True)
             print("\033[F", end='', flush=True)
         time.sleep(1)
         if match_found_event.is_set():
             break
+
+
 def resource_usage():
     cpu_percent = psutil.cpu_percent(interval=1)
     memory_info = psutil.virtual_memory()
     return cpu_percent, memory_info.percent
 
+
 def crack_hash(target_hash, hash_type, chars, min_length, max_length, safety_pause=None):
+    global threads
     results = []
-    threads = []
+
+    t_printer = None  # Initialize t_printer variable
+
     try:
+        t_printer = threading.Thread(target=resource_printer)
+        t_printer.start()
+
         for _ in range(args.threads):
             t = threading.Thread(target=brute_force,
-                                 args=(target_hash, hash_type, chars, min_length, max_length, safety_pause))
+                                 args=(target_hash, hash_type, chars, min_length, max_length, success_event,
+                                       safety_pause))
             t.start()
             threads.append(t)
 
@@ -118,12 +136,16 @@ def crack_hash(target_hash, hash_type, chars, min_length, max_length, safety_pau
         shutdown_event.set()
         for t in threads:
             t.join()
-
-    finally:
-        if args.threads > 1:
+        if t_printer:
             t_printer.join()
 
-    results.append(brute_force(target_hash, args.hash_type, chars, min_length, 22, safety_pause))
+    finally:
+        if not success_event.is_set():
+            print(f"\nNo match found for hash {target_hash}.")
+
+        if t_printer:
+            t_printer.join()
+
     return results
 
 
@@ -142,10 +164,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*'
+    chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*() -_+=?<>'
     min_length = args.length
 
-    safety_pause = 1.35 if args.safety else None
+    safety_pause = args.safety
 
     try:
         with open(args.hash, 'r') as file:
@@ -163,37 +185,21 @@ if __name__ == "__main__":
         exit(1)
 
     try:
-        success_event = threading.Event()  #success event to signal threads to stop
+        success_event = threading.Event()  # success event to signal threads to stop
 
-        threads = []
-
-        for _ in range(args.threads):
-            t = threading.Thread(target=brute_force,
-                                 args=(target_hash, args.hash_type, chars, min_length, 22, success_event, safety_pause))
-            t.start()
-            threads.append(t)
-
-        if args.threads > 1:
-            t_printer = threading.Thread(target=resource_printer)
-            t_printer.start()
-
-        for t in threads:
-            t.join()
-
-        if args.threads > 1:
-            t_printer.join()
-
-        results = brute_force(target_hash, args.hash_type, chars, min_length, 22, success_event, safety_pause)
+        results = crack_hash(target_hash, args.hash_type, chars, min_length, 22, safety_pause)
         if results:
             print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {results}")
 
+
     except KeyboardInterrupt:
+
         print("\nInitiating graceful shutdown. Please wait...")
-        success_event.set()  #success event to stop threads
+
+        success_event.set()  # success event to stop threads
+
         for t in threads:
             t.join()
-        if args.threads > 1:
-            t_printer.join()
 
     if not success_event.is_set():
         print(f"\nNo match found for hash {target_hash}.")
