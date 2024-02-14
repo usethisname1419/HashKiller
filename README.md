@@ -2,7 +2,6 @@
 
 Welcome to HashKiller, an efficient and user-friendly tool designed to brute-force specific hash types from a provided file.
 
-HashKillerV2 Now cracks pkzip hashes
 
 # Description
 
