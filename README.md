@@ -57,9 +57,6 @@ Donations
 If you found HashKiller useful and would like to show appreciation, consider donating:
 
 BTC:
-    `bc1qd3se09vq3wp63tfq5fgcpcmvy8ef7r09z8h5kd`
-
-ETH:
-    `0xB139a7f6A2398fd4F50BbaC9970da8BE57E6F539`
+    `bc1qtezfajhysn6dut07m60vtg0s33jy8tqcvjqqzk`
 
 Your support is greatly appreciated!
