@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import concurrent.futures
+# The 'concurrent.futures' module was imported but not used in the code
 import psutil
 import argparse
 import hashlib
@@ -17,6 +17,7 @@ init(autoreset=True)
 shutdown_event = threading.Event()
 match_found_event = threading.Event()
 threads = []
+
 
 def generate_combinations(chars, min_length, max_length=22):
     for length in range(min_length, max_length + 1):
@@ -48,126 +49,132 @@ def pkzip_crack(zipfile_path, password):
     try:
         with zipfile.ZipFile(zipfile_path, 'r') as zip_file:
             zip_file.extractall(pwd=password.encode())
-            return password
-    except Exception as e:
-        return None
+            return True
+    except Exception:
+        return False
 
 
-def print_current_password(hash_type, target_hash, current_word):
+def print_current_password(hash_type, current_word):
     with print_lock:
         sys.stdout.write("\r\033[K")  # Move cursor to the beginning of the line and clear it
         sys.stdout.write(f'TYPE: {hash_type} | TRYING: {current_word}')
         sys.stdout.flush()
 
 
+def compute_hash(hash_type, word):
+    if hash_type == 'md5':
+        return md5_hash(word)
+    elif hash_type == 'sha1':
+        return sha1_hash(word)
+    elif hash_type == 'sha256':
+        return sha256_hash(word)
+    elif hash_type == 'nt':
+        return nt_hash(word)
+    else:
+        return None
+
+
+def handle_match_found(success_event, target_hash, word):
+    success_event.set()
+    match_found_event.set()
+    with print_lock:
+        print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {word}")
+    return word
+
+
+def apply_safety_pause(safety_pause, counter):
+    if not safety_pause:
+        return
+
+    if safety_pause == 1 and counter % 699999 == 0:
+        time.sleep(1.35)
+    elif safety_pause == 2 and counter % 699999 == 0:
+        time.sleep(2)
+    elif safety_pause == 3 and counter % 199999 == 0:
+        time.sleep(1.5)
+
 
 def brute_force(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None):
     counter = 0
-    computed_hash = None  # Assign a default value to computed_hash
 
     for word in generate_combinations(chars, min_length, max_length):
         if shutdown_event.is_set() or success_event.is_set():
-            return
+            return None
 
-        print_current_password(hash_type, target_hash, word)
+        print_current_password(hash_type, word)
 
-        if hash_type == 'md5':
-            computed_hash = md5_hash(word)
-        elif hash_type == 'sha1':
-            computed_hash = sha1_hash(word)
-        elif hash_type == 'sha256':
-            computed_hash = sha256_hash(word)
+        if hash_type in ('md5', 'sha1', 'sha256', 'nt'):
+            computed_hash = compute_hash(hash_type, word)
+            if computed_hash == target_hash:
+                return handle_match_found(success_event, target_hash, word)
         elif hash_type == 'sha512_unix':
             if sha512_crypt.verify(word, target_hash):
-                success_event.set()
-                with print_lock:
-                    print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {word}")
-                    time.sleep(2)
-                return word
-        elif hash_type == 'nt':
-            computed_hash = nt_hash(word)
+                return handle_match_found(success_event, target_hash, word)
         elif hash_type == 'pkzip':
             if pkzip_crack(target_hash, word):
-                success_event.set()
-                with print_lock:
-                    print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {word}")
-                    time.sleep(2)
-                return word
+                return handle_match_found(success_event, target_hash, word)
         else:
             raise ValueError("Unsupported hash type")
 
-        if computed_hash == target_hash:
-            success_event.set()
-            match_found_event.set()
-            time.sleep(1)
-            with print_lock:
-                print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {word}")
-
-            return word
-
         counter += 1
-        if safety_pause:
-            if safety_pause == 1 and counter % 699999 == 0:
-                time.sleep(1.35)
-            elif safety_pause == 2 and counter % 699999 == 0:
-                time.sleep(2)
-            elif safety_pause == 3 and counter % 199999 == 0:
-                time.sleep(1.5)
+        apply_safety_pause(safety_pause, counter)
+
+    return None
 
 
 def resource_printer():
-    while not shutdown_event.is_set():
+    while not shutdown_event.is_set() and not match_found_event.is_set():
         cpu, mem = resource_usage()
         with print_lock:
             print(f'\n\rCPU Usage: {cpu}%    Memory Usage: {mem}%', end='', flush=True)
             print("\033[F", end='', flush=True)
         time.sleep(1)
-        if match_found_event.is_set():
-            break
 
 
 def resource_usage():
-    cpu_percent = psutil.cpu_percent(interval=1)
+    cpu_percent = psutil.cpu_percent(interval=0.5)
     memory_info = psutil.virtual_memory()
     return cpu_percent, memory_info.percent
 
 
-def crack_hash(target_hash, hash_type, chars, min_length, max_length, safety_pause=None):
+def crack_hash(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None):
     global threads
-    results = []
+    result = None
 
-    t_printer = None  # Initialize t_printer variable
+    t_printer = threading.Thread(target=resource_printer)
+    t_printer.daemon = True
+    t_printer.start()
 
     try:
-        t_printer = threading.Thread(target=resource_printer)
-        t_printer.start()
+        thread_results = [None] * args.threads
 
-        for _ in range(args.threads):
-            t = threading.Thread(target=brute_force,
-                                 args=(target_hash, hash_type, chars, min_length, max_length, success_event,
-                                       safety_pause))
+        for i in range(args.threads):
+            t = threading.Thread(target=lambda idx=i: thread_results.__setitem__(idx, brute_force(
+                target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause)))
             t.start()
             threads.append(t)
 
         for t in threads:
             t.join()
 
+        # Find the first non-None result
+        for res in thread_results:
+            if res is not None:
+                result = res
+                break
+
     except KeyboardInterrupt:
         print("\nInitiating graceful shutdown. Please wait...")
         shutdown_event.set()
         for t in threads:
             t.join()
-        if t_printer:
-            t_printer.join()
 
     finally:
-        if not success_event.is_set():
-            print(f"\nNo match found for hash {target_hash}.")
+        shutdown_event.set()  # Ensure resource printer stops
+        if t_printer.is_alive():
+            t_printer.join(timeout=1)
 
-        if t_printer:
-            t_printer.join()
-
-    return results
+    return result
 
 
 if __name__ == "__main__":
@@ -187,7 +194,6 @@ if __name__ == "__main__":
 
     chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*() -_+=?<>'
     min_length = args.length
-
     safety_pause = args.safety
 
     try:
@@ -207,21 +213,17 @@ if __name__ == "__main__":
 
     try:
         success_event = threading.Event()  # success event to signal threads to stop
+        result = crack_hash(target_hash, args.hash_type, chars, min_length, 22, success_event, safety_pause)
 
-        results = crack_hash(target_hash, args.hash_type, chars, min_length, 22, safety_pause)
-        if results:
-            print(f"\nMatch found for hash {target_hash}:{Fore.LIGHTBLUE_EX} {results}")
-
+        if result:
+            print(f"\nPassword found: {Fore.LIGHTBLUE_EX}{result}")
+        elif not shutdown_event.is_set():
+            print(f"\nNo match found for hash {target_hash}.")
 
     except KeyboardInterrupt:
-
         print("\nInitiating graceful shutdown. Please wait...")
-
-        success_event.set()  # success event to stop threads
+        shutdown_event.set()
 
         for t in threads:
-            t.join()
-
-    if not success_event.is_set():
-        print(f"\nNo match found for hash {target_hash}.")
-
+            if t.is_alive():
+                t.join()
