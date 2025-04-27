@@ -10,6 +10,7 @@ import threading
 from colorama import Fore, init
 import zipfile
 import sys
+import re
 
 print_lock = threading.Lock()
 init(autoreset=True)
@@ -23,6 +24,31 @@ def generate_combinations(chars, min_length, max_length=22):
     for length in range(min_length, max_length + 1):
         for combo in product(chars, repeat=length):
             yield ''.join(combo)
+
+
+def generate_partial_combinations(pattern, chars):
+    """Generate combinations based on a pattern where '?' represents a wildcard character"""
+    if '?' not in pattern:
+        yield pattern
+        return
+
+    wildcard_positions = [pos for pos, char in enumerate(pattern) if char == '?']
+    fixed_parts = []
+    current_pos = 0
+
+    for pos in wildcard_positions:
+        if pos > current_pos:
+            fixed_parts.append((current_pos, pattern[current_pos:pos]))
+        current_pos = pos + 1
+
+    if current_pos < len(pattern):
+        fixed_parts.append((current_pos, pattern[current_pos:]))
+
+    for combo in product(chars, repeat=len(wildcard_positions)):
+        result = list(pattern)
+        for i, char in enumerate(combo):
+            result[wildcard_positions[i]] = char
+        yield ''.join(result)
 
 
 def md5_hash(string):
@@ -94,10 +120,17 @@ def apply_safety_pause(safety_pause, counter):
         time.sleep(1.5)
 
 
-def brute_force(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None):
+def brute_force(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None, partial=None):
     counter = 0
 
-    for word in generate_combinations(chars, min_length, max_length):
+    if partial:
+        # Use the partial pattern to generate combinations
+        combinations = generate_partial_combinations(partial, chars)
+    else:
+        # Use regular brute force
+        combinations = generate_combinations(chars, min_length, max_length)
+
+    for word in combinations:
         if shutdown_event.is_set() or success_event.is_set():
             return None
 
@@ -137,7 +170,7 @@ def resource_usage():
     return cpu_percent, memory_info.percent
 
 
-def crack_hash(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None):
+def crack_hash(target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause=None, partial=None):
     global threads
     result = None
 
@@ -150,7 +183,7 @@ def crack_hash(target_hash, hash_type, chars, min_length, max_length, success_ev
 
         for i in range(args.threads):
             t = threading.Thread(target=lambda idx=i: thread_results.__setitem__(idx, brute_force(
-                target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause)))
+                target_hash, hash_type, chars, min_length, max_length, success_event, safety_pause, partial)))
             t.start()
             threads.append(t)
 
@@ -189,12 +222,27 @@ if __name__ == "__main__":
                         help="Number of threads to use for brute-forcing. Default is 1. Max is 4.")
     parser.add_argument("--safety", type=int, choices=[1, 2, 3], default=None,
                         help="Choose a safety level to reduce CPU usage during brute-forcing. Safety levels 1, 2, 3")
+    parser.add_argument("--partial", type=str, default=None,
+                        help="Specify a partial password pattern using '?' as wildcards (e.g. 'peter????')")
 
     args = parser.parse_args()
 
     chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*() -_+=?<>'
     min_length = args.length
     safety_pause = args.safety
+    partial = args.partial
+
+    # Validate partial pattern if provided
+    if partial:
+        if not re.match(r'^[a-zA-Z0-9!@#$%^&*() \-_+=?<>?]+$', partial):
+            print("Error: Partial pattern contains invalid characters.")
+            exit(1)
+        print(f"Using partial pattern: {partial}")
+        # Count expected combinations for informational purposes
+        wildcard_count = partial.count('?')
+        if wildcard_count > 0:
+            possible_combinations = len(chars) ** wildcard_count
+            print(f"Pattern has {wildcard_count} wildcards, resulting in approximately {possible_combinations:,} combinations to try.")
 
     try:
         with open(args.hash, 'r') as file:
@@ -213,7 +261,7 @@ if __name__ == "__main__":
 
     try:
         success_event = threading.Event()  # success event to signal threads to stop
-        result = crack_hash(target_hash, args.hash_type, chars, min_length, 22, success_event, safety_pause)
+        result = crack_hash(target_hash, args.hash_type, chars, min_length, 22, success_event, safety_pause, partial)
 
         if result:
             print(f"\nPassword found: {Fore.LIGHTBLUE_EX}{result}")
