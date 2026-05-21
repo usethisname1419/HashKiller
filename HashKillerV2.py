@@ -182,10 +182,17 @@ if __name__ == "__main__":
                         help="Number of threads to use for brute-forcing. Default is 1. Max is 4.")
     parser.add_argument("--safety", type=int, choices=[1, 2, 3], default=None,
                         help="Choose a safety level to reduce CPU usage during brute-forcing. Safety levels 1, 2, 3")
+    parser.add_argument("--charset", type=str, default=None,
+                        help="Custom character set to use for brute-forcing. If not provided, a default set will be used.")
 
     args = parser.parse_args()
 
-    chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*() -_+=?<>'
+    # Use the custom character set if provided, otherwise use the default set
+    if args.charset:
+        chars = args.charset
+    else:
+        chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*() -_+=?<>'
+
     min_length = args.length
 
     safety_pause = args.safety
@@ -224,4 +231,3 @@ if __name__ == "__main__":
 
     if not success_event.is_set():
         print(f"\nNo match found for hash {target_hash}.")
-
